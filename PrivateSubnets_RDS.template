@@ -1,0 +1,191 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Create an RDS DBInstance in an existing Virtual Private Cloud (VPC). **WARNING** This template creates an Amazon Relational Database Service database instance. You will be billed for the AWS resources used if you create a stack from this template.",
+
+  "Parameters" : {
+
+    "VpcId" : {
+      "Type" : "String",
+      "Description" : "VpcId of your existing Virtual Private Cloud (VPC)"
+    },
+
+    "VpcCidrBlock" : {
+      "Default" : "10.0.0.0/16",
+      "Description" : "Enter the CIDR Block for VPC (e.g. 10.100.0.0/16)",
+      "Type" : "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern" : "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/)(\\d|[1-2]\\d|3[0-2])$",
+      "ConstraintDescription" : "Only supports CIDR Block syntax"
+    },    
+
+    "PrivateRouteTableIDA" : {
+      "Type" : "String",
+      "Description" : "ID of the private route table in your VPC that will use the NAT instance as default path to 0.0.0.0/0"
+    },
+
+    "PrivateRouteTableIDB" : {
+      "Type" : "String",
+      "Description" : "ID of the private route table in your VPC that will use the NAT instance as default path to 0.0.0.0/0"
+    },
+
+    "DBName": {
+      "Default": "idautoapps",
+      "Description" : "Name of the database instance",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "64",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+
+    "DBUsername": {
+      "Default": "root",
+      "Description" : "The database admin account username",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "16",
+      "ConstraintDescription" : "must begin with a letter and contain only alphanumeric characters."
+    },
+
+    "DBPassword": {
+      "Default": "idAuto#123",
+      "NoEcho": "true",
+      "Description" : "The database admin account password",
+      "Type": "String",
+      "MinLength": "8",
+      "MaxLength": "41",
+      "ConstraintDescription" : "Minimum of 8 characters"
+    },
+
+    "DBInstanceClass": {
+      "Default": "db.m3.large",
+      "Description" : "The database instance class type",
+      "Type": "String"
+    },
+
+    "PrivateSubnetACidrBlock" : {
+      "Default" : "10.0.2.0/24",
+      "Description" : "Enter the CIDR Block for PrivateSubnetA (e.g. 10.100.1.0/24)",
+      "Type" : "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern" : "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/)(\\d|[1-2]\\d|3[0-2])$",
+      "ConstraintDescription" : "Only supports CIDR Block syntax"
+    },   
+
+    "PrivateSubnetBCidrBlock" : {
+      "Default" : "10.0.3.0/24",
+      "Description" : "Enter the CIDR Block for PublicSubnetB (e.g. 10.100.2.0/24)",
+      "Type" : "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "AllowedPattern" : "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/)(\\d|[1-2]\\d|3[0-2])$",
+      "ConstraintDescription" : "Only supports CIDR Block syntax"
+    }
+
+  },
+
+  "Resources" : {
+
+    "PrivateSubnetA" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VpcId" },
+        "AvailabilityZone" : { "Fn::Select": [ "1", {"Fn::GetAZs": {"Ref": "AWS::Region"}} ]},
+        "CidrBlock" : { "Ref" : "PrivateSubnetACidrBlock" } ,
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackName"} },
+          {"Key" : "Network", "Value" : "PrivateSubnetA" }
+        ]
+      }
+    },
+
+    "PrivateSubnetARouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PrivateSubnetA" },
+        "RouteTableId" : { "Ref" : "PrivateRouteTableIDA" }
+      }
+    },
+
+    "PrivateSubnetB" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VpcId" },
+        "AvailabilityZone" : { "Fn::Select": [ "2", {"Fn::GetAZs": {"Ref": "AWS::Region"}} ]},
+        "CidrBlock" : { "Ref" : "PrivateSubnetBCidrBlock" },
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackName"} },
+          {"Key" : "Network", "Value" : "PrivateSubnetB" }
+        ]
+      }
+    },
+
+    "PrivateSubnetBRouteTableAssociation" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PrivateSubnetB" },
+        "RouteTableId" : { "Ref" : "PrivateRouteTableIDB" }
+      }
+    },
+
+    "PrivateDBSubnetGroup" : {
+      "Type" : "AWS::RDS::DBSubnetGroup",
+      "Properties" : {
+        "DBSubnetGroupDescription" : "Subnets available for the RDS DB Instance",
+        "SubnetIds" : [{ "Ref" : "PrivateSubnetA" },{ "Ref" : "PrivateSubnetB" }]
+      }
+    },
+
+    "PrivateDBSecurityGroup" : {
+      "Type" : "AWS::RDS::DBSecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Security group for RDS DB Instance",
+        "DBSecurityGroupIngress" : {
+            "CIDRIP" : { "Ref" : "VpcCidrBlock" }
+        },
+        "EC2VpcId" : { "Ref" : "VpcId" }
+      }
+    },
+
+    "PrivateDBInstance" : {
+      "Type" : "AWS::RDS::DBInstance",
+      "Properties" : {
+        "DBName" : { "Ref" : "DBName" },
+        "AllocatedStorage" : "25",
+        "DBInstanceClass" : { "Ref" : "DBInstanceClass" },
+        "Engine" : "MySQL",
+        "EngineVersion" : "5.6",
+        "MultiAZ" : "true",
+        "MasterUsername" : { "Ref" : "DBUsername" } ,
+        "MasterUserPassword" : { "Ref" : "DBPassword" },
+        "DBSubnetGroupName" : { "Ref" : "PrivateDBSubnetGroup" },
+        "DBSecurityGroups" : [ { "Ref" : "PrivateDBSecurityGroup" } ]
+      }
+    }
+  },
+
+  "Outputs" : {
+    "DBConnectionName" : {
+       "Value" : { "Fn::GetAtt": [ "PrivateDBInstance", "Endpoint.Address" ] },
+       "Description" : "DNS name for this RDS instance."
+    },
+
+    "DatabaseName" : {
+       "Value" : { "Ref": "DBName" },
+       "Description" : "Name of pre-created database"
+    },
+
+    "PrivateSubnetA" : {
+      "Value" : {"Ref" : "PrivateSubnetA"},
+      "Description" : "Private Subnet in AZ A"
+    },
+
+    "PrivateSubnetB" : {
+      "Value" : {"Ref" : "PrivateSubnetB"},
+      "Description" : "Private Subnet in AZ B"
+    }
+
+  }
+}

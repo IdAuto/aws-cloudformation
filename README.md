@@ -1,4 +1,4 @@
-aws-cloudformation
-==================
+CloudFormation
+==============
 
-AWS CloudFormation Templates
+Contains AWS CloudFormation templates
